@@ -42,7 +42,6 @@ import org.gradle.api.internal.artifacts.result.DefaultUnresolvedComponentResult
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.api.internal.component.ArtifactType;
 import org.gradle.api.internal.component.ComponentTypeRegistry;
-import org.gradle.internal.Factory;
 import org.gradle.internal.Transformers;
 import org.gradle.internal.component.model.ComponentArtifactMetadata;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
@@ -114,37 +113,36 @@ public class DefaultArtifactResolutionQuery implements ArtifactResolutionQuery {
         }
         List<ResolutionAwareRepository> repositories = CollectionUtils.collect(repositoryHandler, Transformers.cast(ResolutionAwareRepository.class));
         ResolutionStrategyInternal resolutionStrategy = configurationContainer.detachedConfiguration().getResolutionStrategy();
-        final ComponentResolvers componentResolvers = ivyFactory.create(resolutionStrategy, repositories, metadataHandler.getComponentMetadataProcessor());
-        final ComponentMetaDataResolver componentMetaDataResolver = componentResolvers.getComponentResolver();
-        final ArtifactResolver artifactResolver = new ErrorHandlingArtifactResolver(componentResolvers.getArtifactResolver());
+        ComponentResolvers componentResolvers = ivyFactory.create(resolutionStrategy, repositories, metadataHandler.getComponentMetadataProcessor());
+        ComponentMetaDataResolver componentMetaDataResolver = componentResolvers.getComponentResolver();
+        ArtifactResolver artifactResolver = new ErrorHandlingArtifactResolver(componentResolvers.getArtifactResolver());
+        return createResult(componentMetaDataResolver, artifactResolver);
+    }
 
-        return lockingManager.useCache(new Factory<ArtifactResolutionResult>() {
-            public ArtifactResolutionResult create() {
-                Set<ComponentResult> componentResults = Sets.newHashSet();
+    private ArtifactResolutionResult createResult(ComponentMetaDataResolver componentMetaDataResolver, ArtifactResolver artifactResolver) {
+        Set<ComponentResult> componentResults = Sets.newHashSet();
 
-                for (ComponentIdentifier componentId : componentIds) {
-                    try {
-                        ComponentIdentifier validId = validateComponentIdentifier(componentId);
-                        componentResults.add(buildComponentResult(validId, componentMetaDataResolver, artifactResolver));
-                    } catch (Throwable t) {
-                        componentResults.add(new DefaultUnresolvedComponentResult(componentId, t));
-                    }
-                }
-
-                return new DefaultArtifactResolutionResult(componentResults);
+        for (ComponentIdentifier componentId : componentIds) {
+            try {
+                ComponentIdentifier validId = validateComponentIdentifier(componentId);
+                componentResults.add(buildComponentResult(validId, componentMetaDataResolver, artifactResolver));
+            } catch (Throwable t) {
+                componentResults.add(new DefaultUnresolvedComponentResult(componentId, t));
             }
+        }
 
-            private ComponentIdentifier validateComponentIdentifier(ComponentIdentifier componentId) {
-                if (componentId instanceof ModuleComponentIdentifier) {
-                    return componentId;
-                }
-                if(componentId instanceof ProjectComponentIdentifier) {
-                    throw new IllegalArgumentException(String.format("Cannot query artifacts for a project component (%s).", componentId.getDisplayName()));
-                }
+        return new DefaultArtifactResolutionResult(componentResults);
+    }
 
-                throw new IllegalArgumentException(String.format("Cannot resolve the artifacts for component %s with unsupported type %s.", componentId.getDisplayName(), componentId.getClass().getName()));
-            }
-        });
+    private ComponentIdentifier validateComponentIdentifier(ComponentIdentifier componentId) {
+        if (componentId instanceof ModuleComponentIdentifier) {
+            return componentId;
+        }
+        if (componentId instanceof ProjectComponentIdentifier) {
+            throw new IllegalArgumentException(String.format("Cannot query artifacts for a project component (%s).", componentId.getDisplayName()));
+        }
+
+        throw new IllegalArgumentException(String.format("Cannot resolve the artifacts for component %s with unsupported type %s.", componentId.getDisplayName(), componentId.getClass().getName()));
     }
 
     private ComponentArtifactsResult buildComponentResult(ComponentIdentifier componentId, ComponentMetaDataResolver componentMetaDataResolver, ArtifactResolver artifactResolver) {

@@ -240,10 +240,10 @@ class HttpServer extends ServerWithExpectations implements HttpServerFixture {
     }
 
     /**
-     * Expects one GET request, which will block for maximum 60 seconds
+     * Expects one GET request, which will block for 60 seconds by default
      */
-    void expectGetBlocking(String path) {
-        expect(path, false, ['GET'], blocking())
+    void expectGetBlocking(String path, int seconds = 60) {
+        expect(path, false, ['GET'], blocking(seconds))
     }
 
     /**
@@ -295,12 +295,12 @@ class HttpServer extends ServerWithExpectations implements HttpServerFixture {
         }
     }
 
-    private Action blocking() {
+    private Action blocking(int seconds = 60) {
         new ActionSupport("throw socket timeout exception") {
             CountDownLatch latch = new CountDownLatch(1)
             void handle(HttpServletRequest request, HttpServletResponse response) {
                 try {
-                    latch.await(60, TimeUnit.SECONDS)
+                    latch.await(seconds, TimeUnit.SECONDS)
                 } catch (InterruptedException e) {
                     // ignore
                 }
